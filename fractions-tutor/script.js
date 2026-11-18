@@ -248,19 +248,25 @@ function showWelcome() {
       '<p class="note">' + w.voiceNote + "</p>";
   }
 
-  card.innerHTML =
-    '<div class="home-top"><div class="wordmark">' + FLASK_SVG + w.appName + "</div></div>" +
-    '<h1 class="headline">' + w.headline.replace(/\*(.+?)\*/, "<em>$1</em>") + "</h1>" +
-    '<p class="sub">' + w.tagline + "</p>" +
-    '<div class="ask-row"><div class="ask-face">' + faceSvg("cheering") + '</div>' +
-      '<div class="ask-bubble">' + w.question + "</div></div>" +
-    '<div class="start-options">' +
-      w.options.map((o, i) =>
-        '<button class="start-option" data-option="' + i + '"><span>' + o.label + "</span><small>" + o.note + "</small></button>"
-      ).join("") +
+    card.innerHTML =
+    '<div class="home-head">' +
+      '<div class="home-top"><div class="wordmark">' + FLASK_SVG + w.appName + "</div></div>" +
+      '<h1 class="headline">' + w.headline.replace(/\*(.+?)\*/, "<em>$1</em>") + "</h1>" +
+      '<p class="sub">' + w.tagline + "</p>" +
     "</div>" +
-    voiceHtml +
-    '<p class="home-footer">' + w.footer + "</p>";
+    '<div class="home-mid">' +
+      '<div class="ask-row"><div class="ask-face">' + faceSvg("cheering") + '</div>' +
+        '<div class="ask-bubble">' + w.question + "</div></div>" +
+      '<div class="start-options">' +
+        w.options.map((o, i) =>
+          '<button class="start-option" data-option="' + i + '"><span>' + o.label + "</span><small>" + o.note + "</small></button>"
+        ).join("") +
+      "</div>" +
+    "</div>" +
+    '<div class="home-foot">' +
+      voiceHtml +
+      '<p class="home-footer">' + w.footer + "</p>" +
+    "</div>";
 
   // each option starts the lesson at a different place
   document.querySelectorAll(".start-option").forEach(btn => {

@@ -261,3 +261,12 @@ button:focus-visible { outline: 3px solid var(--purple-700); outline-offset: 2px
   .btn.hint-btn { margin-top: 2px; }
   .keypad { gap: 5px; }
 }
+/* ---------- Welcome page: fill the screen neatly ---------- */
+.card.home { display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
+.home-mid, .home-foot { width: 100%; max-width: 480px; margin: 0 auto; }
+.start-options { margin-bottom: 0; }
+.ask-row { margin-bottom: 14px; }
+
+@media (min-width: 900px) {
+  .card.home { justify-content: flex-start; gap: 28px; }
+}
