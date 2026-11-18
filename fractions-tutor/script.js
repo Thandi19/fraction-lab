@@ -7,22 +7,28 @@ const inputArea = document.getElementById("inputArea");
 const backBtn = document.getElementById("backBtn");
 const nextBtn = document.getElementById("nextBtn");
 const soundBtn = document.getElementById("soundBtn");
-const progress = document.getElementById("progress");
-const progressLabel = document.getElementById("progressLabel");
-const barParts = document.querySelectorAll("#bar span");
+const tracker = document.getElementById("tracker");
+const nowLine = document.getElementById("nowLine");
 
 // ---------- Where we are in the lesson ----------
-let lesson = null;       // everything from lesson.json
-let screens = [];        // the list of screens, in order
-let current = 0;         // which screen we are on
-let watchStep = 0;       // which line of the worked example we are on
-let practice = null;     // the learner's progress in Part 3 or Part 4
+let lesson = null;             // everything from lesson.json
+let screens = [];              // the list of screens, in order
+let current = 0;               // which screen we are on
+let watchStep = 0;             // which line of the worked example we are on
+let practice = null;           // the learner's progress in Part 3 or Part 4
+const completed = new Set();   // which parts (1 to 4) the learner has finished
 
 const HINT_NAMES = ["Hint", "Bigger hint", "Show me"];
+
 const FLASK_SVG =
   '<svg width="20" height="22" viewBox="0 0 24 26" aria-hidden="true">' +
   '<path d="M9 2h6M10 2v7l-5.5 10a2.2 2.2 0 0 0 2 3.2h11a2.2 2.2 0 0 0 2-3.2L14 9V2" fill="none" stroke="#4B2A8A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
   '<path d="M7 16h10l2.4 4.3a1.2 1.2 0 0 1-1 1.7H5.6a1.2 1.2 0 0 1-1-1.7z" fill="#C9B6FF"/></svg>';
+
+const LOCK_SVG =
+  '<svg width="11" height="12" viewBox="0 0 12 14" aria-hidden="true">' +
+  '<rect x="1.5" y="6" width="9" height="7" rx="1.5" fill="none" stroke="#5B4A7A" stroke-width="1.6"/>' +
+  '<path d="M3.5 6V4.2a2.5 2.5 0 0 1 5 0V6" fill="none" stroke="#5B4A7A" stroke-width="1.6"/></svg>';
 
 // ---------- The tutor's face (4 moods) ----------
 const FACES = {
@@ -114,7 +120,7 @@ function speak(text) {
       utterance.lang = pick.voice.lang;
     }
     utterance.pitch = pick.pitch;
-       utterance.rate = 0.95;
+    utterance.rate = 0.95;
     speechSynthesis.speak(utterance);
   });
 }
@@ -142,28 +148,15 @@ function setBubble(text, mood) {
   speak(text);
 }
 
-// ---------- Start with embedded data, or load the JSON when served locally ----------
+// ---------- Start: load the lesson file ----------
 async function start() {
-  const embeddedLesson = document.getElementById("lesson-data");
-  if (location.protocol === "file:" && embeddedLesson) {
-    lesson = JSON.parse(embeddedLesson.textContent);
-  } else {
-    try {
-      const response = await fetch("lesson.json");
-      if (!response.ok) throw new Error("lesson.json returned " + response.status);
-      lesson = await response.json();
-    } catch (error) {
-      if (embeddedLesson) {
-        lesson = JSON.parse(embeddedLesson.textContent);
-        buildScreens();
-        render();
-        return;
-      }
-      console.error("Could not load lesson.json:", error);
-      card.innerHTML = "<h2>Could not load the lesson</h2><p>Keep lesson.json beside index.html and open this folder with Live Server, or restore the lesson-data block in index.html to run it directly.</p>";
-      avatar.innerHTML = faceSvg("thinking");
-      return;
-    }
+  try {
+    const response = await fetch("lesson.json");
+    lesson = await response.json();
+  } catch (error) {
+    card.innerHTML = "<h2>Oops</h2><p>The lesson file could not be loaded. Open this page with Live Server, and check lesson.json for typos.</p>";
+    avatar.innerHTML = faceSvg("thinking");
+    return;
   }
   buildScreens();
   render();
@@ -201,6 +194,52 @@ function highlightLine(lineEl, type) {
   else fracs[fracs.length - 1].classList.add("hl");
 }
 
+// ---------- The part tracker in the header ----------
+function drawTracker(screen) {
+  const labels = lesson.tracker.parts;
+  const finished = screen.type === "finish";
+
+  tracker.innerHTML = labels.map((p, i) => {
+    const n = i + 1;
+    const isNow = n === screen.part && !finished;
+    const isDone = completed.has(n) && !isNow;
+    const locked = n === 4 && !completed.has(3);
+    const cls = "tp" + (isNow ? " now" : "") + (isDone ? " done" : "") + (locked ? " locked" : "");
+    const mark = isDone ? "✓ " : (locked ? LOCK_SVG : "");
+    return '<button class="' + cls + '" data-part="' + n + '"' +
+      (isNow ? ' aria-current="step"' : "") +
+      (locked ? ' aria-disabled="true"' : "") + ">" +
+      "<i></i><span>" + mark + p.short + "</span></button>";
+  }).join("");
+
+  if (finished) {
+    nowLine.textContent = lesson.tracker.finished;
+    return;
+  }
+  let line = "Part " + screen.part + " of 4 · " + labels[screen.part - 1].name;
+  if (screen.type === "practice") {
+    line += " · Step " + (practice.stepIndex + 1) + " of " + currentSteps().length;
+  }
+  nowLine.textContent = line;
+}
+
+// Tap a part to go back to it (Solo stays locked until Together is done)
+tracker.addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const part = Number(btn.dataset.part);
+  const screen = screens[current];
+  if (part === screen.part && screen.type !== "finish") return;
+  if (part === 4 && !completed.has(3)) {
+    setBubble(lesson.tracker.locked, "calm");
+    return;
+  }
+  current = screens.findIndex(s => s.part === part);
+  watchStep = 0;
+  enterIfPractice(false);
+  render();
+});
+
 // ---------- Show the current screen ----------
 function render() {
   const screen = screens[current];
@@ -209,11 +248,7 @@ function render() {
   app.classList.toggle("landing", home);
   card.classList.toggle("home", home);
   inputArea.hidden = true;
-
-  // header: progress label and bar
-  progress.hidden = home;
-  progressLabel.textContent = "Part " + screen.part + " of 4";
-  barParts.forEach((part, i) => part.classList.toggle("done", i < screen.part));
+  if (!home) drawTracker(screen);
 
   // buttons
   backBtn.style.visibility = "visible";
@@ -227,7 +262,7 @@ function render() {
   if (screen.type === "practice") showPractice(openingMessage(), "calm");
   if (screen.type === "finish") showFinish();
 
-   card.scrollTop = screen.type === "watch" ? card.scrollHeight : 0;
+  card.scrollTop = 0;
   window.scrollTo(0, 0);
 }
 
@@ -248,7 +283,7 @@ function showWelcome() {
       '<p class="note">' + w.voiceNote + "</p>";
   }
 
-    card.innerHTML =
+  card.innerHTML =
     '<div class="home-head">' +
       '<div class="home-top"><div class="wordmark">' + FLASK_SVG + w.appName + "</div></div>" +
       '<h1 class="headline">' + w.headline.replace(/\*(.+?)\*/, "<em>$1</em>") + "</h1>" +
@@ -287,7 +322,6 @@ function showWelcome() {
   });
 }
 
-
 // ---------- Part 1: Explain ----------
 function showExplain(i) {
   const block = lesson.explain[i];
@@ -306,7 +340,7 @@ function showWatch() {
   card.innerHTML = "";
   for (let i = 0; i <= watchStep; i++) {
     const div = document.createElement("div");
-        div.className = "math-line" + (i < watchStep ? " past" : "");
+    div.className = "math-line" + (i < watchStep ? " past" : "");
     div.innerHTML = fractions(lines[i].show);
     if (i === watchStep) {
       const type = lines[i].highlight.replace("-fraction", "");
@@ -314,6 +348,7 @@ function showWatch() {
     }
     card.appendChild(div);
   }
+  card.scrollTop = card.scrollHeight;
 }
 
 // ---------- Parts 3 and 4: the learner types ----------
@@ -346,6 +381,8 @@ function showPractice(message, mood) {
   const step = steps[p.stepIndex];
   const t = lesson.tutor;
   const lastStep = p.stepIndex === steps.length - 1;
+
+  drawTracker(screens[current]);
 
   let html =
     '<p class="kicker">' + data.title + " · Step " + (p.stepIndex + 1) + " of " + steps.length + "</p>" +
@@ -401,13 +438,13 @@ function drawInput() {
     ? "Show me again"
     : HINT_NAMES[Math.min(p.hintLevel, 2)] + " " + (p.hintLevel + 1) + " of " + step.hints.length;
 
-    const keys = ["1", "2", "3", "4", "5", "del", "6", "7", "8", "9", "0", "check"].map(k => {
+  const keys = ["1", "2", "3", "4", "5", "del", "6", "7", "8", "9", "0", "check"].map(k => {
     const text = k === "del" ? "Del" : k === "check" ? "Check" : k;
     const cls = k === "del" ? " del" : k === "check" ? " check" : "";
     return '<button class="key' + cls + '" data-key="' + k + '">' + text + "</button>";
   }).join("");
 
-    inputArea.innerHTML =
+  inputArea.innerHTML =
     '<div class="entry-row">' +
       "<div>" +
         '<div class="entry-label">' + fractions(step.label) + "</div>" +
@@ -436,7 +473,11 @@ function sameValue(a, b) {
   return Number(x[0]) * Number(y[1]) === Number(y[0]) * Number(x[1]);
 }
 
-function markCorrect(say) { practice.status = "correct"; showPractice(say, "cheering"); }
+function markCorrect(say) {
+  practice.status = "correct";
+  if (practice.stepIndex === currentSteps().length - 1) completed.add(screens[current].part);
+  showPractice(say, "cheering");
+}
 function markWrong(say) { practice.status = "wrong"; showPractice(say, "thinking"); }
 
 function checkAnswer() {
@@ -544,11 +585,16 @@ function next() {
     current = 0;
     watchStep = 0;
     practice = null;
+    completed.clear();
     render();
     return;
   }
 
   if (current < screens.length - 1) {
+    const upcoming = screens[current + 1];
+    if ((screen.type === "explain" || screen.type === "watch") && upcoming.part !== screen.part) {
+      completed.add(screen.part);
+    }
     current++;
     watchStep = 0;
     enterIfPractice(false);

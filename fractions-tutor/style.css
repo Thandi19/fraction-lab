@@ -25,18 +25,39 @@ body {
   height: 100vh;
   height: 100dvh;
   margin: 0 auto;
-  padding: 12px 20px 16px;
+  padding: 10px 16px max(12px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
+.top, .tutor, .input-area, .bottom { flex: none; }
 
-/* ---------- Header ---------- */
-.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.progress { flex: 1; font-size: 14px; font-weight: 500; }
-.bar { display: flex; gap: 4px; margin-top: 4px; }
-.bar span { flex: 1; height: 8px; border-radius: 4px; background: var(--lilac-200); }
-.bar span.done { background: var(--purple-600); }
+/* ---------- Header: the part tracker ---------- */
+.top { display: block; }
+.top-row { display: flex; align-items: center; gap: 10px; }
+.tracker { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tp {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0;
+  font: 500 12px / 1.2 Inter, sans-serif;
+  text-align: left;
+  color: #5B4A7A;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.tp i { display: block; height: 8px; border-radius: 4px; background: var(--lilac-200); }
+.tp.done i, .tp.now i { background: var(--purple-600); }
+.tp.done { color: var(--purple-700); }
+.tp.now { color: var(--ink); font-weight: 600; }
+.tp.now span { align-self: flex-start; padding-bottom: 1px; border-bottom: 2px solid var(--purple-700); }
+.tp.locked { cursor: not-allowed; }
+.tp svg { vertical-align: -2px; margin-right: 2px; }
+.now-line { margin: 2px 0 0; font-size: 14px; font-weight: 500; color: var(--purple-700); }
 
 .sound-btn {
   min-height: 48px;
@@ -61,16 +82,16 @@ body {
   background: var(--lilac-100);
   border-radius: 16px;
 }
+
 /* ---------- Card ---------- */
 .card {
   flex: 1;
-   min-height: 130px;
+  min-height: 130px;
   padding: 16px;
   background: var(--white);
   border-radius: 16px;
   overflow-y: auto;
 }
-
 .card h2 { margin: 0 0 12px; font: 600 24px Poppins, Inter, sans-serif; color: var(--purple-700); }
 .card h3 { font-size: 16px; font-weight: 600; margin: 16px 0 8px; color: var(--purple-700); }
 .card ol, .card ul { padding-left: 24px; }
@@ -79,8 +100,9 @@ body {
 .kicker { margin: 0 0 8px; font-size: 14px; font-weight: 500; color: var(--purple-700); }
 
 /* ---------- Maths ---------- */
+.math-line { font-size: 32px; font-weight: 500; margin: 8px 0; line-height: 1.6; }
 .math-line.past { font-size: 20px; margin: 2px 0; }
-.top, .tutor, .input-area, .bottom { flex: none; }
+.work-line { font-size: 22px; margin: 4px 0; line-height: 1.7; }
 .frac {
   display: inline-flex;
   flex-direction: column;
@@ -127,6 +149,9 @@ body {
   border-radius: 10px;
   cursor: pointer;
 }
+.box.wide { width: 170px; }
+.box.active { border-width: 4px; border-color: var(--purple-700); }
+
 .keypad { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; max-width: 480px; }
 .key {
   min-height: 44px;
@@ -141,6 +166,7 @@ body {
 .key.del, .key.check { font-size: 14px; }
 .key.del { background: var(--lilac-100); }
 .key.check { color: var(--white); background: var(--purple-600); }
+
 /* ---------- Buttons ---------- */
 .bottom { display: flex; gap: 8px; }
 .btn {
@@ -155,11 +181,26 @@ body {
 .btn.hint-btn { width: auto; min-height: 44px; margin-top: 6px; padding: 0 14px; font-size: 15px; color: var(--purple-700); background: var(--white); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 button:focus-visible { outline: 3px solid var(--purple-700); outline-offset: 2px; }
+.key, .box, .btn, .choice, .sound-btn, .tp, .start-option {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.key { user-select: none; }
 
-/* ---------- Landing page (welcome) ---------- */
-.app.landing { height: auto; min-height: 100vh; min-height: 100dvh; }
+/* ---------- Welcome page: always fills the screen ---------- */
+.app.landing { height: auto; min-height: 100vh; min-height: 100dvh; padding-bottom: 0; }
 .app.landing .top, .app.landing .tutor, .app.landing .bottom { display: none; }
-.card.home { background: transparent; padding: 8px 0 20px; overflow: visible; }
+.app.landing .card.home {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 8px 0 max(16px, env(safe-area-inset-bottom));
+  background: transparent;
+  overflow: visible;
+}
+.home-head, .home-mid, .home-foot { width: 100%; max-width: 480px; margin: 0 auto; }
 
 .home-top { text-align: center; }
 .wordmark {
@@ -179,14 +220,14 @@ button:focus-visible { outline: 3px solid var(--purple-700); outline-offset: 2px
   text-align: center;
 }
 .headline em { font-style: normal; color: var(--purple-600); }
-.sub { margin: 0 auto 18px; max-width: 420px; font-size: 16px; text-align: center; }
+.sub { margin: 0 auto; max-width: 420px; font-size: 16px; text-align: center; }
 
-.ask-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 12px; }
+.ask-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; }
 .ask-face { width: 52px; height: 52px; flex: none; }
 .ask-face svg { width: 100%; height: 100%; }
 .ask-bubble { flex: 1; padding: 10px 14px; font-size: 16px; background: var(--lilac-100); border-radius: 16px; }
 
-.start-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.start-options { display: flex; flex-direction: column; gap: 8px; }
 .start-option {
   min-height: 52px;
   padding: 8px 16px;
@@ -220,36 +261,14 @@ button:focus-visible { outline: 3px solid var(--purple-700); outline-offset: 2px
 .choice[aria-pressed="true"] { color: var(--white); background: var(--purple-600); }
 .choice[aria-pressed="true"]::before { content: "✓ "; }
 .note { margin: 6px 0 0; font-size: 14px; }
-.home-footer { margin: 16px 0 0; font-size: 14px; text-align: center; }
+.home-footer { margin: 14px 0 0; font-size: 14px; text-align: center; }
 
-/* ---------- Laptop: tutor on the left, lesson on the right ---------- */
-@media (min-width: 900px) {
-  .app {
-  max-width: 480px;
-  height: 100vh;
-  height: 100dvh;
-  margin: 0 auto;
-  padding: 10px 16px max(12px, env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-  .top { grid-area: top; }
-  .tutor { grid-area: tutor; flex-direction: column; align-self: start; position: sticky; top: 12px; }
-  .card { grid-area: card; }
-  .input-area { grid-area: input; }
-  .bottom { grid-area: bottom; }
-  .app.landing { display: flex; flex-direction: column; max-width: 760px; }
-}
-.key, .box, .btn, .choice, .sound-btn {
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-.key { user-select: none; }
-
+/* ---------- Short phone screens: tighter spacing ---------- */
 @media (max-height: 740px) and (max-width: 899px) {
   .app { padding-top: 8px; gap: 8px; }
   .sound-btn { min-height: 40px; }
+  .tp { min-height: 40px; }
+  .now-line { margin: 0; font-size: 13px; }
   .avatar { width: 44px; height: 44px; }
   .bubble { padding: 8px 12px; font-size: 15px; }
   .card { padding: 12px; min-height: 120px; }
@@ -261,25 +280,28 @@ button:focus-visible { outline: 3px solid var(--purple-700); outline-offset: 2px
   .btn.hint-btn { margin-top: 2px; }
   .keypad { gap: 5px; }
 }
-/* ---------- Welcome page: always fills the screen ---------- */
-.app.landing {
-  height: auto;
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding-bottom: 0;
-}
-.app.landing .card.home {
-  flex: 1 0 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 20px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
-}
-.home-head, .home-mid, .home-foot { width: 100%; max-width: 480px; margin: 0 auto; }
-.start-options { margin-bottom: 0; }
-.ask-row { margin-bottom: 14px; }
 
+/* ---------- Laptop: tutor on the left, lesson on the right ---------- */
 @media (min-width: 900px) {
+  .app {
+    max-width: 1100px;
+    height: auto;
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    grid-template-areas:
+      "top    top"
+      "tutor  card"
+      "tutor  input"
+      "tutor  bottom";
+    grid-template-rows: auto 1fr auto auto;
+    column-gap: 24px;
+  }
+  .top { grid-area: top; }
+  .tutor { grid-area: tutor; flex-direction: column; align-self: start; position: sticky; top: 12px; }
+  .card { grid-area: card; }
+  .input-area { grid-area: input; }
+  .bottom { grid-area: bottom; }
+  .app.landing { display: flex; flex-direction: column; max-width: 760px; }
   .app.landing .card.home { flex: 0 0 auto; justify-content: flex-start; gap: 28px; }
 }

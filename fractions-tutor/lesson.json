@@ -16,7 +16,7 @@
     "finish": "You did the whole thing yourself: match the bottoms, convert, add, simplify. That's the full method."
   },
 
-    "welcome": {
+  "welcome": {
     "appName": "Fraction Lab",
     "headline": "Fractions, *figured out.*",
     "tagline": "Try it yourself first. Get help only when you want it.",
@@ -31,6 +31,18 @@
     "voiceNote": "Voices depend on your device. The words are always on screen.",
     "footer": "About 10 minutes. No sign-up. No points."
   },
+
+  "tracker": {
+    "parts": [
+      { "short": "Explain", "name": "Explain" },
+      { "short": "Watch", "name": "Watch an example" },
+      { "short": "Together", "name": "Try one together" },
+      { "short": "Solo", "name": "On your own" }
+    ],
+    "locked": "Finish the Together part first, then Solo opens up.",
+    "finished": "All four parts done"
+  },
+
   "explain": [
     {
       "title": "The goal",
@@ -211,7 +223,7 @@
   "onYourOwn": {
     "title": "On your own",
     "problem": "2/5 + 1/4",
-        "intro": "Your turn. I'm here if you want a hint.",
+    "intro": "Your turn. I'm here if you want a hint.",
     "steps": [
       {
         "id": "common-bottom",
@@ -236,7 +248,7 @@
       },
       {
         "id": "answer",
-        "ask": "Now convert both fractions, add the tops and simplify. Type the answer as one fraction.",
+        "ask": "Convert, add the tops and simplify. Type one fraction.",
         "input": "fraction",
         "label": "2/5 + 1/4 =",
         "works": "2/5 + 1/4 = 13/20",
