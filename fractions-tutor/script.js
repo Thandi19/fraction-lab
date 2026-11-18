@@ -114,7 +114,7 @@ function speak(text) {
       utterance.lang = pick.voice.lang;
     }
     utterance.pitch = pick.pitch;
-    utterance.rate = 1;
+       utterance.rate = 0.95;
     speechSynthesis.speak(utterance);
   });
 }
