@@ -261,23 +261,25 @@ button:focus-visible { outline: 3px solid var(--purple-700); outline-offset: 2px
   .btn.hint-btn { margin-top: 2px; }
   .keypad { gap: 5px; }
 }
-/* ---------- Welcome page: fill the screen neatly ---------- */
-.card.home { display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
-.home-mid, .home-foot { width: 100%; max-width: 480px; margin: 0 auto; }
+/* ---------- Welcome page: always fills the screen ---------- */
+.app.landing {
+  height: auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-bottom: 0;
+}
+.app.landing .card.home {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.home-head, .home-mid, .home-foot { width: 100%; max-width: 480px; margin: 0 auto; }
 .start-options { margin-bottom: 0; }
 .ask-row { margin-bottom: 14px; }
 
 @media (min-width: 900px) {
-  .card.home { justify-content: flex-start; gap: 28px; }
-}
-/* ---------- Welcome page: groups fill the whole screen ---------- */
-.app.landing { padding-bottom: 0; }
-.card.home {
-  min-height: calc(100vh - 10px);
-  min-height: calc(100dvh - 10px);
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
-}
-
-@media (min-width: 900px) {
-  .card.home { min-height: 0; }
+  .app.landing .card.home { flex: 0 0 auto; justify-content: flex-start; gap: 28px; }
 }
