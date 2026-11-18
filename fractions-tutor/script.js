@@ -55,8 +55,8 @@ let voiceChoice = "off";     // "off", "female" or "male"
 let lastVoice = "female";    // what the Sound button turns on
 let voices = [];
 
-const FEMALE = /female|zira|samantha|susan|hazel|karen|moira|tessa|fiona|victoria|aria|jenny|libby|sonia|natasha|catherine|heather/i;
-const MALE = /\bmale\b|david|daniel|alex|fred|george|james|ryan|guy|oliver|richard|mark|tom/i;
+const FEMALE = /female|zira|samantha|susan|hazel|karen|moira|tessa|fiona|victoria|aria|jenny|libby|sonia|natasha|catherine|heather|ava|allison|joanna|emma|amy|zoe|olivia/i;
+const MALE = /\bmale\b|david|daniel|alex|fred|george|james|ryan|guy|oliver|richard|mark|tom|davis|brian|christopher|eric|roger|thomas|aaron/i;
 
 function loadVoices() {
   if (!("speechSynthesis" in window)) return;
@@ -67,13 +67,28 @@ if ("speechSynthesis" in window) {
   speechSynthesis.onvoiceschanged = loadVoices;
 }
 
-// Find a matching voice. If the device has none, change the pitch instead.
+// A score for how natural a voice sounds (higher is better)
+function voiceScore(v) {
+  let score = 0;
+  if (/natural|neural|online|premium|enhanced/i.test(v.name)) score += 10;
+  if (/google/i.test(v.name)) score += 6;
+  if (/^en[-_]za/i.test(v.lang)) score += 3;        // South African English
+  else if (/^en[-_]gb/i.test(v.lang)) score += 2;
+  else if (/^en[-_]us/i.test(v.lang)) score += 1;
+  if (/compact|espeak/i.test(v.name)) score -= 10;
+  return score;
+}
+
+// Find the best matching voice. If the device has none, change the pitch instead.
 function pickVoice(kind) {
-  const match = kind === "female"
-    ? voices.find(v => FEMALE.test(v.name))
-    : voices.find(v => MALE.test(v.name) && !FEMALE.test(v.name));
-  if (match) return { voice: match, pitch: 1 };
-  return { voice: voices[0] || null, pitch: kind === "female" ? 1.25 : 0.75 };
+  const wanted = voices.filter(v =>
+    kind === "female" ? FEMALE.test(v.name) : (MALE.test(v.name) && !FEMALE.test(v.name))
+  );
+  wanted.sort((a, b) => voiceScore(b) - voiceScore(a));
+  if (wanted.length > 0) return { voice: wanted[0], pitch: 1 };
+
+  const best = voices.slice().sort((a, b) => voiceScore(b) - voiceScore(a))[0] || null;
+  return { voice: best, pitch: kind === "female" ? 1.15 : 0.85 };
 }
 
 // Say maths out loud in words
@@ -86,15 +101,22 @@ function speakable(text) {
     .replace(/\+/g, " plus ");
 }
 
+// Speak one sentence at a time, so there are natural pauses
 function speak(text) {
   if (voiceChoice === "off" || !("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(speakable(text));
   const pick = pickVoice(voiceChoice);
-  if (pick.voice) utterance.voice = pick.voice;
-  utterance.pitch = pick.pitch;
-  utterance.rate = 0.95;
-  speechSynthesis.speak(utterance);
+  const sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
+  sentences.forEach(sentence => {
+    const utterance = new SpeechSynthesisUtterance(speakable(sentence.trim()));
+    if (pick.voice) {
+      utterance.voice = pick.voice;
+      utterance.lang = pick.voice.lang;
+    }
+    utterance.pitch = pick.pitch;
+    utterance.rate = 1;
+    speechSynthesis.speak(utterance);
+  });
 }
 
 function updateSoundButton() {
