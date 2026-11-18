@@ -270,3 +270,14 @@ button:focus-visible { outline: 3px solid var(--purple-700); outline-offset: 2px
 @media (min-width: 900px) {
   .card.home { justify-content: flex-start; gap: 28px; }
 }
+/* ---------- Welcome page: groups fill the whole screen ---------- */
+.app.landing { padding-bottom: 0; }
+.card.home {
+  min-height: calc(100vh - 10px);
+  min-height: calc(100dvh - 10px);
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 900px) {
+  .card.home { min-height: 0; }
+}
