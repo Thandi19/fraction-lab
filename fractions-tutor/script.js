@@ -22,12 +22,28 @@ const completed = new Set();   // which parts (1 to 4) the learner has finished
 let stats = freshStats();
 
 function freshStats() {
-  return { skills: {}, stepsSeen: new Set(), hintedSteps: new Set() };
+  return { skills: {}, steps: {}, stepsSeen: new Set(), hintedSteps: new Set() };
 }
 
 function skillStat(skill) {
   if (!stats.skills[skill]) stats.skills[skill] = { slips: 0, hints: 0 };
   return stats.skills[skill];
+}
+
+function stepStat(skill) {
+  const key = stepKey() + ":" + skill;
+  if (!stats.steps[key]) {
+    stats.steps[key] = {
+      practiceKey: practice.key,
+      stepIndex: practice.stepIndex,
+      skill: skill,
+      prompt: currentStep().ask,
+      slips: 0,
+      hints: 0,
+      lastSlipMessage: ""
+    };
+  }
+  return stats.steps[key];
 }
 
 const HINT_NAMES = ["Hint", "Bigger hint", "Show me"];
@@ -546,7 +562,11 @@ function markCorrect(say) {
 
 // A wrong answer counts as a slip on a skill (the mistake's own skill, or the step's skill)
 function markWrong(say, skill) {
-  skillStat(skill || currentStep().skill).slips++;
+  const missedSkill = skill || currentStep().skill;
+  skillStat(missedSkill).slips++;
+  const step = stepStat(missedSkill);
+  step.slips++;
+  step.lastSlipMessage = say;
   practice.status = "wrong";
   showPractice(say, "thinking");
 }
@@ -589,6 +609,7 @@ function giveHint() {
   let text = hints[level];
 
   skillStat(step.skill).hints++;
+  stepStat(step.skill).hints++;
   stats.hintedSteps.add(stepKey());
 
   p.hintStreak++;
@@ -626,16 +647,13 @@ function buildReport() {
   const order = Object.keys(lesson.report.skills);
   const used = order.filter(id => stats.skills[id]);
   const strong = used.filter(id => stats.skills[id].slips === 0 && stats.skills[id].hints === 0);
-  const slipped = used
-    .filter(id => stats.skills[id].slips > 0)
-    .sort((a, b) => stats.skills[b].slips - stats.skills[a].slips);
-  const supported = used
-    .filter(id => stats.skills[id].slips > 0 || stats.skills[id].hints > 0)
+  const supported = Object.values(stats.steps)
+    .filter(step => step.slips > 0 || step.hints > 0)
     .sort((a, b) => {
-      const score = id => stats.skills[id].slips * 2 + stats.skills[id].hints;
-      return score(b) - score(a) || stats.skills[b].slips - stats.skills[a].slips;
+      const score = step => step.slips * 2 + step.hints;
+      return score(b) - score(a) || b.slips - a.slips;
     });
-  return { strong: strong, slipped: slipped, focus: supported[0] || null };
+  return { strong: strong, focus: supported[0] || null };
 }
 
 function listSkills(ids) {
@@ -653,25 +671,20 @@ function skillTopic(id) {
   }[id] || lesson.report.skills[id].strong;
 }
 
-function questionTopic(id) {
-  return {
-    "match-bottoms": "common denominator",
-    convert: "conversion",
-    "add-tops": "addition",
-    simplify: "simplifying"
-  }[id] || "fraction";
-}
-
 function supportMessage(report) {
-  const id = report.focus;
-  if (!id) return "";
-  const result = stats.skills[id];
-  const topic = skillTopic(id);
-  if (result.hints > 0 && result.slips > 0) {
-    return "You used a hint and needed another try while " + topic + ".";
+  const step = report.focus;
+  const prefix = step.hints > 0 && step.slips > 0
+    ? "You used a hint and needed another try on: "
+    : step.hints > 0
+      ? "You used a hint on: "
+      : "You needed another try on: ";
+  const reminder = step.lastSlipMessage && step.lastSlipMessage !== lesson.tutor.tryAgain
+    ? step.lastSlipMessage
+    : lesson.report.skills[step.skill].tip;
+  if (step.slips > 0) {
+    return prefix + step.prompt + " Remember: " + reminder;
   }
-  if (result.hints > 0) return "You used a hint while " + topic + ".";
-  return "You needed another try while " + topic + ".";
+  return prefix + step.prompt + " " + reminder;
 }
 
 // What the tutor says at the end: the finish line plus one tip (all lines are pre-recorded)
@@ -679,7 +692,7 @@ function finishMessage(report) {
   const t = lesson.tutor;
   const r = lesson.report;
   if (!report.focus) return t.finish + " " + r.noSlips;
-  return t.finish + " " + r.skills[report.focus].tip;
+  return t.finish + " " + r.skills[report.focus.skill].tip;
 }
 
 function showFinish() {
@@ -699,9 +712,9 @@ function showFinish() {
   }
   if (report.focus) {
     html += '<div class="rep try">' + supportMessage(report) + "</div>" +
-      '<p><strong>Next:</strong> Try one more ' + questionTopic(report.focus) + " question.</p>" +
-      '<button class="rep-btn no-print" data-practice-skill="' + report.focus +
-        '">Practice this step again</button>';
+      '<p><strong>Next:</strong> Practice this exact step again.</p>' +
+      '<button class="rep-btn no-print" data-practice-section="' + report.focus.practiceKey +
+        '" data-practice-index="' + report.focus.stepIndex + '">Practice this step again</button>';
   } else {
     html += '<div class="rep good">✓ ' + r.noSlipsShort + "</div>" +
       "<p><strong>Next:</strong> Start again and see if you can solve the steps without hints.</p>";
@@ -714,19 +727,19 @@ function showFinish() {
   card.querySelector(".finish-equation").textContent = f.working.join(" ");
   nextBtn.textContent = f.again || "Start again";
 
-  // Practice the same skill again from its existing lesson question.
-  card.querySelectorAll("[data-practice-skill]").forEach(btn => {
+  // Return to the exact step that needed support.
+  card.querySelectorAll("[data-practice-section]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const skill = btn.dataset.practiceSkill;
+      const sectionKey = btn.dataset.practiceSection;
+      const stepIndex = Number(btn.dataset.practiceIndex);
       const targetIndex = screens.findIndex(screen =>
-        screen.type === "practice" &&
-        lesson[screen.key].steps.some(step => step.skill === skill));
+        screen.type === "practice" && screen.key === sectionKey);
       if (targetIndex < 0) return;
       current = targetIndex;
       watchStep = 0;
       practice = {
-        key: screens[current].key,
-        stepIndex: lesson[screens[current].key].steps.findIndex(step => step.skill === skill)
+        key: sectionKey,
+        stepIndex: stepIndex
       };
       resetStep();
       render();
