@@ -305,3 +305,37 @@ button:focus-visible { outline: 3px solid var(--purple-700); outline-offset: 2px
   .app.landing { display: flex; flex-direction: column; max-width: 760px; }
   .app.landing .card.home { flex: 0 0 auto; justify-content: flex-start; gap: 28px; }
 }
+/* ---------- Explain screens ---------- */
+.ex-line { margin: 10px 0 16px; }
+.ex-label { font-size: 15px; font-weight: 500; color: var(--purple-700); }
+.moves { font-size: 22px; font-weight: 500; }
+.moves li { margin-bottom: 12px; }
+
+/* ---------- Learning report ---------- */
+.report { margin-top: 12px; padding: 12px; background: var(--lilac-50); border-radius: 12px; }
+.report h3 { margin: 0 0 8px; }
+.rep { margin-bottom: 8px; padding: 8px 10px; border-radius: 10px; font-size: 15px; line-height: 1.4; }
+.rep.good { background: #E3F5EC; color: #1E7B4F; }
+.rep.try { background: #FFF1DC; color: #8A4B00; }
+.rep-btn {
+  display: block;
+  margin-top: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  font: 600 14px Inter, sans-serif;
+  color: var(--purple-700);
+  background: var(--white);
+  border: 2px solid var(--purple-600);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.rep-note { margin: 4px 0 0; font-size: 14px; }
+.save-btn { width: 100%; margin-top: 10px; min-height: 44px; font-size: 16px; color: var(--purple-700); background: var(--white); }
+
+/* When saving the report: show only the card */
+@media print {
+  body { background: #fff; }
+  .top, .tutor, .bottom, .input-area, .no-print { display: none !important; }
+  .app { display: block !important; height: auto !important; max-width: none; padding: 0; }
+  .card { overflow: visible; padding: 0; }
+}

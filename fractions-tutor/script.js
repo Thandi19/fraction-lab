@@ -18,6 +18,18 @@ let watchStep = 0;             // which line of the worked example we are on
 let practice = null;           // the learner's progress in Part 3 or Part 4
 const completed = new Set();   // which parts (1 to 4) the learner has finished
 
+// ---------- What the learner slipped on (for the learning report) ----------
+let stats = freshStats();
+
+function freshStats() {
+  return { skills: {}, stepsSeen: new Set(), hintedSteps: new Set() };
+}
+
+function skillStat(skill) {
+  if (!stats.skills[skill]) stats.skills[skill] = { slips: 0, hints: 0 };
+  return stats.skills[skill];
+}
+
 const HINT_NAMES = ["Hint", "Bigger hint", "Show me"];
 
 const FLASK_SVG =
@@ -73,7 +85,7 @@ if ("speechSynthesis" in window) {
   speechSynthesis.onvoiceschanged = loadVoices;
 }
 
-// A score for how natural a voice sounds (higher is better)
+// A score for how natural a browser voice sounds (higher is better)
 function voiceScore(v) {
   let score = 0;
   if (/natural|neural|online|premium|enhanced/i.test(v.name)) score += 10;
@@ -85,7 +97,7 @@ function voiceScore(v) {
   return score;
 }
 
-// Find the best matching voice. If the device has none, change the pitch instead.
+// Find the best matching browser voice. If the device has none, change the pitch instead.
 function pickVoice(kind) {
   const wanted = voices.filter(v =>
     kind === "female" ? FEMALE.test(v.name) : (MALE.test(v.name) && !FEMALE.test(v.name))
@@ -97,7 +109,7 @@ function pickVoice(kind) {
   return { voice: best, pitch: kind === "female" ? 1.15 : 0.85 };
 }
 
-// Say maths out loud in words
+// Say maths out loud in words (browser voice only)
 function speakable(text) {
   return text
     .replace(/(\d+)\/(\d+)/g, "$1 over $2")
@@ -107,8 +119,8 @@ function speakable(text) {
     .replace(/\+/g, " plus ");
 }
 
-// Speak one sentence at a time, so there are natural pauses
-function speak(text) {
+// The backup voice: used only when there is no MP3 file for a line
+function browserSpeak(text) {
   if (voiceChoice === "off" || !("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
   const pick = pickVoice(voiceChoice);
@@ -125,6 +137,36 @@ function speak(text) {
   });
 }
 
+// ---------- Pre-made voice recordings (MP3 files) ----------
+// The audio maker uses this same function, so a file name always matches the text on screen
+function hashText(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36) + "-" + text.length;
+}
+
+let currentAudio = null;
+
+function stopSpeaking() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+}
+
+// Play the recording for this text. If there is no file, use the browser voice instead.
+function speak(text) {
+  if (voiceChoice === "off") return;
+  stopSpeaking();
+  const audio = new Audio("audio/" + voiceChoice + "/" + hashText(text) + ".mp3");
+  currentAudio = audio;
+  audio.addEventListener("error", () => {
+    if (currentAudio === audio) { currentAudio = null; browserSpeak(text); }
+  });
+  audio.play().catch(() => {});
+}
+
 function updateSoundButton() {
   const isOn = voiceChoice !== "off";
   soundBtn.setAttribute("aria-pressed", String(isOn));
@@ -134,7 +176,7 @@ function updateSoundButton() {
 function setVoice(choice) {
   voiceChoice = choice;
   if (choice !== "off") lastVoice = choice;
-  else if ("speechSynthesis" in window) speechSynthesis.cancel();
+  else stopSpeaking();
   updateSoundButton();
   document.querySelectorAll("#voiceChoices .choice").forEach(btn => {
     btn.setAttribute("aria-pressed", String(btn.dataset.voice === choice));
@@ -148,15 +190,27 @@ function setBubble(text, mood) {
   speak(text);
 }
 
-// ---------- Start: load the lesson file ----------
+// ---------- Start from embedded data for file://, or fetch lesson.json on a server ----------
 async function start() {
-  try {
-    const response = await fetch("lesson.json");
-    lesson = await response.json();
-  } catch (error) {
-    card.innerHTML = "<h2>Oops</h2><p>The lesson file could not be loaded. Open this page with Live Server, and check lesson.json for typos.</p>";
-    avatar.innerHTML = faceSvg("thinking");
-    return;
+  const embeddedLesson = document.getElementById("lesson-data");
+  if (location.protocol === "file:" && embeddedLesson) {
+    lesson = JSON.parse(embeddedLesson.textContent);
+  } else {
+    try {
+      const response = await fetch("lesson.json");
+      if (!response.ok) throw new Error("lesson.json returned " + response.status);
+      lesson = await response.json();
+    } catch (error) {
+      if (embeddedLesson) {
+        console.warn("Could not load lesson.json; using the embedded lesson copy.", error);
+        lesson = JSON.parse(embeddedLesson.textContent);
+      } else {
+        console.error("Could not load lesson.json:", error);
+        card.innerHTML = "<h2>Could not load the lesson</h2><p>Keep lesson.json beside index.html and open this folder with Live Server, or use the embedded lesson copy when opening index.html directly.</p>";
+        avatar.innerHTML = faceSvg("thinking");
+        return;
+      }
+    }
   }
   buildScreens();
   render();
@@ -322,15 +376,21 @@ function showWelcome() {
   });
 }
 
-// ---------- Part 1: Explain ----------
+// ---------- Part 1: Explain (the voice explains, the card shows) ----------
 function showExplain(i) {
   const block = lesson.explain[i];
   setBubble(block.say, "calm");
   let html = "<h2>" + block.title + "</h2>";
-  if (block.text) html += "<p>" + block.text + "</p>";
-  if (block.steps) html += "<ol>" + block.steps.map(s => "<li>" + s + "</li>").join("") + "</ol>";
-  if (block.tip) html += '<p class="tip"><strong>Tip:</strong> ' + block.tip + "</p>";
+  if (block.lines) {
+    html += block.lines.map(l =>
+      '<div class="ex-line"><div class="math-line">' + fractions(l.show) + '</div><div class="ex-label">' + l.label + "</div></div>"
+    ).join("");
+  }
+  if (block.steps) html += '<ol class="moves">' + block.steps.map(s => "<li>" + s + "</li>").join("") + "</ol>";
   card.innerHTML = html;
+  card.querySelectorAll(".ex-line").forEach((el, n) => {
+    if (block.lines[n].highlight) highlightLine(el.querySelector(".math-line"), block.lines[n].highlight);
+  });
 }
 
 // ---------- Part 2: Watch ----------
@@ -368,6 +428,7 @@ function resetStep() {
 
 function currentSteps() { return lesson[practice.key].steps; }
 function currentStep() { return currentSteps()[practice.stepIndex]; }
+function stepKey() { return practice.key + ":" + practice.stepIndex; }
 
 function openingMessage() {
   const data = lesson[practice.key];
@@ -381,6 +442,10 @@ function showPractice(message, mood) {
   const step = steps[p.stepIndex];
   const t = lesson.tutor;
   const lastStep = p.stepIndex === steps.length - 1;
+
+  // remember that the learner has seen this step (for the learning report)
+  stats.stepsSeen.add(stepKey());
+  skillStat(step.skill);
 
   drawTracker(screens[current]);
 
@@ -478,7 +543,13 @@ function markCorrect(say) {
   if (practice.stepIndex === currentSteps().length - 1) completed.add(screens[current].part);
   showPractice(say, "cheering");
 }
-function markWrong(say) { practice.status = "wrong"; showPractice(say, "thinking"); }
+
+// A wrong answer counts as a slip on a skill (the mistake's own skill, or the step's skill)
+function markWrong(say, skill) {
+  skillStat(skill || currentStep().skill).slips++;
+  practice.status = "wrong";
+  showPractice(say, "thinking");
+}
 
 function checkAnswer() {
   const p = practice;
@@ -500,10 +571,10 @@ function checkAnswer() {
   if (also) { markCorrect(also.say); return; }
 
   const mistake = (step.mistakes || []).find(m => m.answer === given);
-  if (mistake) { markWrong(mistake.say); return; }
+  if (mistake) { markWrong(mistake.say, mistake.skill); return; }
 
   const almost = (step.almost || []).find(a => a.answer === given);
-  if (almost) { markWrong(almost.say); return; }
+  if (almost) { markWrong(almost.say, almost.skill); return; }
 
   if (isFraction && sameValue(given, step.correct[0])) { markWrong(t.sameValue); return; }
 
@@ -512,9 +583,14 @@ function checkAnswer() {
 
 function giveHint() {
   const p = practice;
-  const hints = currentStep().hints;
+  const step = currentStep();
+  const hints = step.hints;
   const level = Math.min(p.hintLevel, hints.length - 1);
   let text = hints[level];
+
+  skillStat(step.skill).hints++;
+  stats.hintedSteps.add(stepKey());
+
   p.hintStreak++;
   if (p.hintStreak >= 2) text += " " + lesson.tutor.helpTwice;
   p.lastHint = level;
@@ -545,15 +621,120 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Enter" && e.target.tagName !== "BUTTON") { pressKey("check"); }
 });
 
-// ---------- Finish ----------
+// ---------- Finish: the learning report ----------
+function buildReport() {
+  const order = Object.keys(lesson.report.skills);
+  const used = order.filter(id => stats.skills[id]);
+  const strong = used.filter(id => stats.skills[id].slips === 0 && stats.skills[id].hints === 0);
+  const slipped = used
+    .filter(id => stats.skills[id].slips > 0)
+    .sort((a, b) => stats.skills[b].slips - stats.skills[a].slips);
+  const supported = used
+    .filter(id => stats.skills[id].slips > 0 || stats.skills[id].hints > 0)
+    .sort((a, b) => {
+      const score = id => stats.skills[id].slips * 2 + stats.skills[id].hints;
+      return score(b) - score(a) || stats.skills[b].slips - stats.skills[a].slips;
+    });
+  return { strong: strong, slipped: slipped, focus: supported[0] || null };
+}
+
+function listSkills(ids) {
+  if (ids.length < 2) return ids[0] || "";
+  if (ids.length === 2) return ids[0] + " and " + ids[1];
+  return ids.slice(0, -1).join(", ") + ", and " + ids[ids.length - 1];
+}
+
+function skillTopic(id) {
+  return {
+    "match-bottoms": "matching bottoms",
+    convert: "converting fractions",
+    "add-tops": "adding the tops",
+    simplify: "simplifying"
+  }[id] || lesson.report.skills[id].strong;
+}
+
+function questionTopic(id) {
+  return {
+    "match-bottoms": "common denominator",
+    convert: "conversion",
+    "add-tops": "addition",
+    simplify: "simplifying"
+  }[id] || "fraction";
+}
+
+function supportMessage(report) {
+  const id = report.focus;
+  if (!id) return "";
+  const result = stats.skills[id];
+  const topic = skillTopic(id);
+  if (result.hints > 0 && result.slips > 0) {
+    return "You used a hint and needed another try while " + topic + ".";
+  }
+  if (result.hints > 0) return "You used a hint while " + topic + ".";
+  return "You needed another try while " + topic + ".";
+}
+
+// What the tutor says at the end: the finish line plus one tip (all lines are pre-recorded)
+function finishMessage(report) {
+  const t = lesson.tutor;
+  const r = lesson.report;
+  if (!report.focus) return t.finish + " " + r.noSlips;
+  return t.finish + " " + r.skills[report.focus].tip;
+}
+
 function showFinish() {
   const f = lesson.finish;
-  setBubble(lesson.tutor.finish, "proud");
-  card.innerHTML =
+  const r = lesson.report;
+  const report = buildReport();
+  setBubble(finishMessage(report), "proud");
+
+  let html =
     "<h2>" + f.heading + "</h2>" +
-    f.working.map(line => '<div class="math-line">' + fractions(line) + "</div>").join("") +
-    "<p>" + f.text + "</p><p>" + f.note + "</p>";
-  nextBtn.textContent = f.again;
+    '<div class="work-line finish-equation"></div>' +
+    '<div class="report"><h3>' + r.heading + "</h3>";
+
+  if (report.strong.length > 0) {
+    html += '<div class="rep good">✓ You\'re getting comfortable with ' +
+      listSkills(report.strong.map(skillTopic)) + ".</div>";
+  }
+  if (report.focus) {
+    html += '<div class="rep try">' + supportMessage(report) + "</div>" +
+      '<p><strong>Next:</strong> Try one more ' + questionTopic(report.focus) + " question.</p>" +
+      '<button class="rep-btn no-print" data-practice-skill="' + report.focus +
+        '">Practice this step again</button>';
+  } else {
+    html += '<div class="rep good">✓ ' + r.noSlipsShort + "</div>" +
+      "<p><strong>Next:</strong> Start again and see if you can solve the steps without hints.</p>";
+  }
+  html += '<p class="rep-note">' +
+    r.hintsLine.replace("{n}", stats.hintedSteps.size).replace("{total}", stats.stepsSeen.size) + "</p></div>" +
+    '<button class="btn save-btn no-print" id="saveBtn">' + r.save + "</button>";
+
+  card.innerHTML = html;
+  card.querySelector(".finish-equation").textContent = f.working.join(" ");
+  nextBtn.textContent = f.again || "Start again";
+
+  // Practice the same skill again from its existing lesson question.
+  card.querySelectorAll("[data-practice-skill]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const skill = btn.dataset.practiceSkill;
+      const targetIndex = screens.findIndex(screen =>
+        screen.type === "practice" &&
+        lesson[screen.key].steps.some(step => step.skill === skill));
+      if (targetIndex < 0) return;
+      current = targetIndex;
+      watchStep = 0;
+      practice = {
+        key: screens[current].key,
+        stepIndex: lesson[screens[current].key].steps.findIndex(step => step.skill === skill)
+      };
+      resetStep();
+      render();
+    });
+  });
+
+  // Save my report: opens the print screen, where the learner can choose Save as PDF
+  document.getElementById("saveBtn").addEventListener("click", () => window.print());
 }
 
 // ---------- Moving forward and back ----------
@@ -586,6 +767,8 @@ function next() {
     watchStep = 0;
     practice = null;
     completed.clear();
+    stats = freshStats();
+    stopSpeaking();
     render();
     return;
   }
